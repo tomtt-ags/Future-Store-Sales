@@ -33,11 +33,14 @@ plt.xlabel('Date')
 plt.ylabel('Passengers')
 
 df = df.set_index('Month')
+df = df.asfreq('MS')
+df.loc[df.index.month.isin([7,8]), 'Passengers'] = np.nan
+df['Passengers'] = df['Passengers'].interpolate('time') 
 # Decompose the time series to visualize its components
 decomposition = sm.tsa.seasonal_decompose(df['Passengers'], model='multiplicative', period=10)
 
 fig = decomposition.plot()
-fig.set_size_inches(14, 10)
+fig.set_size_inches(12, 8)
 
 
 # we can see that the data is not stationary, to use an ARIMA model we need to make it stationary
@@ -77,4 +80,37 @@ plt.title('Stationary Time Series (Log-Differenced)')
 
 # Retest for stationarity
 test_stationarity(df_diff)
+# plt.show()
+
+# We now need to choose parameters for the ARIMA model
+# we can use the ACF and PACF plots to help us choose the parameters
+# ACF plot shows the correlation of the series with its lags
+# PACF plot shows the correlation of the series with its lags, but only the direct lags
+# we look for the first lag that is significant(ACF) this is our p value
+# we look for the first lag that is significant(PACF) this is our q value
+# its significant if it is outside the confidence interval(blanket around the line)
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+plot_acf(df_diff, ax=ax1, lags=20)
+plot_pacf(df_diff, ax=ax2, lags=20)
+# plt.show() 
+# from the plots we can see that the first lag that is significant is 2 for both ACF and PACF
+# Split data into training and test sets
+train_data = df_log[:'1958']
+test_data = df_log['1959':]
+
+# Build ARIMA model
+model = ARIMA(train_data, order=(2, 1, 2), freq='MS')
+arima_result = model.fit()
+
+# Get forecast
+forecast = arima_result.get_forecast(steps=len(test_data))
+forecast_ci = forecast.conf_int()
+
+# Plot the forecast
+plt.figure(figsize=(12, 6))
+plt.plot(df_log, label='Original Log Data')
+plt.plot(forecast.predicted_mean, label='Forecast')
+plt.fill_between(forecast_ci.index, forecast_ci.iloc[:, 0], forecast_ci.iloc[:, 1], color='k', alpha=.15)
+plt.title('ARIMA Model Forecast')
+plt.legend()
 plt.show()
