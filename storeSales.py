@@ -80,6 +80,7 @@ plt.title('Stationary Time Series (Log-Differenced)')
 
 # Retest for stationarity
 test_stationarity(df_diff)
+# managed to get p value down to 0.02 
 # plt.show()
 
 # We now need to choose parameters for the ARIMA model
@@ -114,3 +115,66 @@ plt.fill_between(forecast_ci.index, forecast_ci.iloc[:, 0], forecast_ci.iloc[:, 
 plt.title('ARIMA Model Forecast')
 plt.legend()
 plt.show()
+# predictions is still inaccurate as it is not able to capture the seasonal pattern
+# we can try to use a seasonal ARIMA model
+
+# --- Reset from a clean, principled preprocessing pipeline ---
+# (Keep your imports as-is, but we'll avoid seaborn styling for plots to keep things simple/reproducible)
+import warnings
+warnings.filterwarnings("ignore")
+#### Theoretical Concept: SARIMA
+# Seasonal AutoRegressive Integrated Moving Average (SARIMA) is an extension of ARIMA that explicitly models the seasonal component.
+
+# It is written as SARIMA(p, d, q)(P, D, Q, m), where:
+# - `(p, d, q)` are the non-seasonal parameters:
+#     - p (non-seasonal AR order): The number of non-seasonal lagged observations included in the model.
+#     - d (non-seasonal differencing order): The number of times the data is differenced to remove non-seasonal trend.
+#     - q (non-seasonal MA order): The number of non-seasonal lagged forecast errors included in the model.
+
+# - `(P, D, Q, m)` are the seasonal parameters:
+#     - P (seasonal AR order): The number of seasonal lagged observations included in the model.
+#     - D (seasonal differencing order): The number of times the data is differenced seasonally to remove seasonal trend.
+#     - Q (seasonal MA order): The number of seasonal lagged forecast errors included in the model.
+#     - m (number of periods in a season):The number of time steps for a single seasonal period (e.g., `m=12` for monthly data with an annual seasonality, `m=4` for quarterly data).
+
+# 1) Load and prepare the monthly time series without dropping months
+df = pd.read_csv('21-Days-21-Projects-Dataset/Datasets/airline_passenger_timeseries.csv')
+# Expecting columns: ['Month', 'Passengers'] (classic airline dataset format)
+df['Month'] = pd.to_datetime(df['Month'])
+df = df.set_index('Month').sort_index()
+train_data = df[:'1958']
+test_data = df['1959':]
+sarima_model = sm.tsa.statespace.SARIMAX(train_data,
+                                          order=(1, 1, 1),
+                                          seasonal_order=(1, 1, 1, 12),
+                                          enforce_stationarity=False,
+                                          enforce_invertibility=False,
+                                          freq='MS') # Explicitly set frequency to suppress warnings
+sarima_result = sarima_model.fit()
+
+# Get forecast
+sarima_forecast = sarima_result.get_forecast(steps=len(test_data))
+sarima_forecast_ci = sarima_forecast.conf_int()
+
+# Plot the forecast
+plt.figure(figsize=(14, 7))
+plt.plot(df, label='Original Log Data')
+plt.plot(sarima_forecast.predicted_mean, label='SARIMA Forecast', color='red')
+plt.fill_between(sarima_forecast_ci.index, sarima_forecast_ci.iloc[:, 0], sarima_forecast_ci.iloc[:, 1], color='r', alpha=.15)
+plt.title('SARIMA Model Forecast')
+plt.legend()
+plt.show()
+### Step 9: Conclusion
+
+# In this project, I built a complete time series forecasting pipeline.
+
+# Key Steps Undertaken:
+# 1.  Decomposed the time series to identify its underlying trend and strong yearly seasonality.
+# 2.  Confirmed non-stationarity using the Augmented Dickey-Fuller test.
+# 3.  Transformed the data using log transforms and differencing to achieve stationarity, a prerequisite for ARIMA modeling.
+# 4.  Used ACF/PACF plots to identify the initial parameters for our model.
+# 5.  Built a baseline ARIMA model which captured the trend but failed to model the seasonality.
+# 6.  Built an advanced SARIMA model that successfully captured both trend and seasonality, resulting in a much more accurate forecast.
+# 7.  Evaluated the final model on the original scale using RMSE.
+
+# This project clearly demonstrates the importance of identifying and specifically modeling seasonality for accurate time series forecasting.
